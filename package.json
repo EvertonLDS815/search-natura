@@ -14,7 +14,6 @@
     "dotenv": "^17.2.3",
     "express": "^5.1.0",
     "jsonwebtoken": "^9.0.2",
-    "jwt": "^0.2.0",
     "mongoose": "^8.19.1",
     "multer": "^2.0.2",
     "multer-storage-cloudinary": "^4.0.0"
