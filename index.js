@@ -102,7 +102,7 @@ app.post('/user', upload.single('image'), async (req, res) => {
   try {
     const { name, login, password } = req.body;
 
-    // Verifica se já existe usuário com esse email
+    // Verifica se já existe usuário com esse login
     const existingUser = await User.findOne({ login });
     if (existingUser) {
       return res.status(409).json({ error: "Login already in use" });
@@ -139,13 +139,13 @@ app.post('/login', async (req, res) => {
     const user = await User.findOne({ login });
 
     if (!user) {
-      return res.status(401).json({ error: 'Login não encontrado' });
+      return res.status(401).json({ error: 'Login ou senha incorretos' });
     }
 
     const isMatch = await bcrypt.compare(password, user.password);
 
     if (!isMatch) {
-      return res.status(401).json({ error: 'Senha incorreta' });
+      return res.status(401).json({ error: 'Login ou senha incorretos' });
     }
 
     // ✅ Geração do token JWT
@@ -199,6 +199,15 @@ const auth = (req, res, next) => {
     }
   }
 };
+
+app.get('/user', auth, async (req, res) => {
+  try {
+  const user = await User.find();
+  return res.status(200).json(user);
+  } catch (err) {
+    return res.status(500).json(err);
+  }
+});
 
 // Get Categories
 app.get('/categories', auth, async (req, res) => {
