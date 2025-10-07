@@ -289,6 +289,31 @@ app.post('/product', upload.single('image'), async (req, res) => {
   }
 });
 
+
+// Update Product
+app.patch('/product/:id', auth, async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    // Atualiza e retorna o produto atualizado
+    const updatedProduct = await Product.findOneAndUpdate(
+      { _id: id },
+      req.body,
+      { new: true } // retorna o produto já atualizado
+    );
+
+    if (!updatedProduct) {
+      return res.status(404).json({ error: 'Product not found' });
+    }
+
+    return res.status(200).json(updatedProduct);
+  } catch (err) {
+    console.error('❌ Erro ao atualizar produto:', err);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+
 app.delete('/product/:id', auth, async (req, res) => {
   try {
     const { id } = req.params;
