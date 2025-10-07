@@ -28,16 +28,27 @@ mongoose.connect(process.env.DB_URI, {
 });
 
 const userSchema = new mongoose.Schema({
-  email: { type: String, required: true, unique: true },
+  name: { type: String, required: true },
+  login: { type: String, required: true, unique: true },
   password: { type: String, required: true },
-});
+  imageURL: { type: String, required: true },
+  createdAt: { type: Date, default: Date.now },
+}, { timestamps: true });
 
 const User = mongoose.model('user', userSchema);
+
+const categorySchema = new mongoose.Schema({
+  name: { type: String, required: true },
+  createdAt: { type: Date, default: Date.now },
+}, { timestamps: true });
+
+const Category = mongoose.model('category', categorySchema);
 
 const productSchema = new mongoose.Schema({
   name: { type: String, required: true },
   price: { type: Number, required: true },
   imageURL: { type: String, required: true },
+  category: { type: mongoose.Schema.Types.ObjectId, ref: 'category', required: true },
   createdAt: { type: Date, default: Date.now },
 }, { timestamps: true });
 
@@ -53,7 +64,7 @@ const orderSchema = new mongoose.Schema({
   ],
   createdAt: { type: Date, default: Date.now },
   status: { type: String, enum: ['pending', 'completed'], default: 'pending' },
-});
+}, { timestamps: true });
 
 const Order = mongoose.model('order', orderSchema);
 
@@ -64,21 +75,71 @@ app.use(cors({
   ],
   methods: ['GET', 'POST', 'PATCH', 'DELETE'],
 }));
-app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
+
+// Configuração do Multer
+cloudinary.config({
+  cloud_name: process.env.CLOUDINARY_CLOUD_NAME,
+  api_key: process.env.CLOUDINARY_API_KEY,
+  api_secret: process.env.CLOUDINARY_API_SECRET,
+});
+
+const storage = new CloudinaryStorage({
+  cloudinary: cloudinary,
+  params: {
+    folder: 'meu-projeto', // Nome da pasta
+    allowed_formats: ['jpg', 'png', 'jpeg', 'gif'],
+    public_id: (req, file) => {
+      const nameWithoutExt = path.parse(file.originalname).name; // remove extensão
+      return `${Date.now()}-${nameWithoutExt}`; // nome único sem duplicar a extensão
+    },
+  },
+});
+
+const upload = multer({storage});
+
+// Create User
+app.post('/user', upload.single('image'), async (req, res) => {
+  try {
+    const { name, login, password } = req.body;
+
+    // Verifica se já existe usuário com esse email
+    const existingUser = await User.findOne({ login });
+    if (existingUser) {
+      return res.status(409).json({ error: "Login already in use" });
+    }
+
+    // 🔹 Verifica se imagem foi enviada
+    if (!req.file || !req.file.path) {
+      return res.status(400).json({ error: "Profile image is required" });
+    }
+
+    const imageURL = req.file.path; // URL direta do Cloudinary
+
+    // Criptografa a senha antes de salvar
+    const hashedPassword = await bcrypt.hash(password, 10);
+    const newUser = new User({ name, login, password: hashedPassword, imageURL });
+    await newUser.save();
+
+    return res.status(201).json({ message: "User created successfully" });
+  } catch (err) {
+    console.error("Erro no cadastro:", err);
+    return res.status(500).json({ error: "Internal server error" });
+  }
+});
 
 // Login user
 app.post('/login', async (req, res) => {
   try {
-    const { email, password } = req.body;
+    const { login, password } = req.body;
 
-    if (!email || !password) {
-      return res.status(400).json({ error: 'Email e senha são obrigatórios' });
+    if (!login || !password) {
+      return res.status(400).json({ error: 'Login e senha são obrigatórios' });
     }
 
-    const user = await User.findOne({ email });
+    const user = await User.findOne({ login });
 
     if (!user) {
-      return res.status(401).json({ error: 'Email não encontrado' });
+      return res.status(401).json({ error: 'Login não encontrado' });
     }
 
     const isMatch = await bcrypt.compare(password, user.password);
@@ -91,16 +152,17 @@ app.post('/login', async (req, res) => {
     const token = jwt.sign(
       { userId: user._id },           // payload
       process.env.JWT_SECRET,         // chave secreta
-      { expiresIn: '1d' }             // validade de 1 dia
+      { expiresIn: '7d' }             // validade de 7 dias
     );
 
     // ✅ Retorna o token no JSON
-    res.status(200).json({
+    return res.status(200).json({
       message: 'Login bem-sucedido',
       token,
       user: {
         _id: user._id,
-        email: user.email,
+        login: user.login,
+        name: user.name
         // outros campos públicos se necessário
       }
     });
@@ -108,29 +170,6 @@ app.post('/login', async (req, res) => {
   } catch (err) {
     console.error('Erro no login:', err);
     res.status(500).json({ error: 'Erro interno no servidor' });
-  }
-});
-
-// Create User
-app.post('/create', async (req, res) => {
-  try {
-    const { email, password } = req.body;
-
-    // Verifica se já existe usuário com esse email
-    const existingUser = await User.findOne({ email });
-    if (existingUser) {
-      return res.status(409).json({ error: "Email already in use" });
-    }
-
-    // Criptografa a senha antes de salvar
-    const hashedPassword = await bcrypt.hash(password, 10);
-    const newUser = new User({ email, password: hashedPassword });
-    await newUser.save();
-
-    return res.status(201).json({ message: "User created successfully" });
-  } catch (err) {
-    console.error("Erro no cadastro:", err);
-    return res.status(500).json({ error: "Internal server error" });
   }
 });
 
@@ -161,59 +200,67 @@ const auth = (req, res, next) => {
   }
 };
 
-// Configuração do Multer
-cloudinary.config({
-  cloud_name: process.env.CLOUDINARY_CLOUD_NAME,
-  api_key: process.env.CLOUDINARY_API_KEY,
-  api_secret: process.env.CLOUDINARY_API_SECRET,
-});
-
-const storage = new CloudinaryStorage({
-  cloudinary: cloudinary,
-  params: {
-    folder: 'meu-projeto', // Nome da pasta
-    allowed_formats: ['jpg', 'png', 'jpeg', 'gif'],
-    public_id: (req, file) => {
-      const nameWithoutExt = path.parse(file.originalname).name; // remove extensão
-      return `${Date.now()}-${nameWithoutExt}`; // nome único sem duplicar a extensão
-    },
-  },
-});
-
-const upload = multer({storage});
-
-// Upload de imagem
-app.post('/upload', auth, upload.single('image'), (req, res) => {
+// Get Categories
+app.get('/categories', auth, async (req, res) => {
   try {
-    if (!req.file || !req.file.path) {
-      return res.status(400).json({ error: 'No file uploaded or upload failed' });
-    }
-    res.status(200).json({ imageURL: req.file.path });
+    const categories = await Category.find().sort({createdAt: 1});
+    return res.status(200).json(categories);
   } catch (err) {
-    console.error('Erro no upload:', err);
-    res.status(500).json({ error: 'Erro interno no servidor' });
+    return res.status(500).json(err);
   }
 });
 
-// Create Product
-// Rota Products
-app.get('/products', auth, async (req, res) => {
+// Create Category
+app.post('/category', auth, async (req, res) => {
   try {
-    const products = await Product.find().sort({createdAt: 1});
-    return res.status(200).json(products);
+    const { name } = req.body;
+    const category = new Category({ name });
+    await category.save();
+    return res.status(201).json(category);
   } catch (err) {
     return res.status(500).json(err);
+  }
+});
+
+// Create Product - Upload Image to Cloudinary
+app.post('/product', auth, upload.single('image'), async (req, res) => {
+  try {
+    const { name, price, category } = req.body;
+
+    if (!req.file || !req.file.path) {
+      return res.status(400).json({ error: 'Imagem é obrigatória' });
+    }
+
+    const categoryExists = await Category.findById(category);
+    if (!categoryExists) {
+      return res.status(404).json({ error: 'Categoria não encontrada.' });
+    }
+
+    const imageURL = req.file.path; // URL direta do Cloudinary
+
+    const product = new Product({
+      name,
+      price,
+      category,
+      imageURL,
+    });
+
+    await product.save();
+
+    return res.status(201).json(product);
+  } catch (error) {
+    console.error('❌ Erro ao salvar produto:', error);
+    return res.status(500).json({ error: error.message });
   }
 });
 
 // Get Products
 app.get('/products', auth, async (req, res) => {
   try {
-    const products = await Product.find().sort({ createdAt: -1 });
-    res.status(200).json(products);
+    const products = await Product.find().sort({createdAt: 1});
+    return res.status(200).json(products);
   } catch (err) {
-    console.error('Erro ao buscar produtos:', err);
-    res.status(500).json({ error: 'Erro interno no servidor' });
+    return res.status(500).json(err);
   }
 });
 
@@ -280,23 +327,6 @@ app.get('/orders', async (req, res) => {
     return res.status(200).json(order);
   } catch (err) {
     return res.status(500).json(err);
-  }
-});
-
-// Get Orders by User
-app.get('/orders', auth, async (req, res) => {
-  try {
-    const order = await Order.find().populate('userId').populate('tableId').populate('items.productId');
-    
-
-    if (!order) {
-      return res.status(404).json({ message: 'Order not found' });
-    }
-    
-    return res.status(200).json(order); // Retorna os dados da ordem
-  } catch (err) {
-    console.error(err);
-    return res.status(500).json({ message: 'Server error' });
   }
 });
 
