@@ -313,7 +313,7 @@ app.patch('/product/:id', auth, async (req, res) => {
   }
 });
 
-
+// Delete Product
 app.delete('/product/:id', auth, async (req, res) => {
   try {
     const { id } = req.params;
@@ -345,7 +345,7 @@ app.delete('/product/:id', auth, async (req, res) => {
   }
 });
 
-// Rota Orders
+// Get Orders
 app.get('/orders', async (req, res) => {
   try {
     const order = await Order.find().sort({createdAt: 1}).populate('userId').populate('tableId').populate('items.productId');
@@ -369,7 +369,6 @@ app.post('/order', auth, async (req, res) => {
       .populate('tableId')
       .populate('items.productId');
 
-    io.emit('orders@new', orderDetails);
     return res.status(201).json(orderDetails);  // Envia a resposta para o frontend
   } catch (err) {
     console.error(err);
@@ -382,30 +381,30 @@ app.patch('/order/:id', auth, async (req, res) => {
   try {
     const { id } = req.params;
 
-    const updatedOrder = await Order.findOneAndUpdate(
-      {_id: id},
-      [
-        {
-          $set: {
-            status: {
-              $cond: { if: { $eq: ["$status", "pending"] }, then: "completed", else: "pending" },
-            },
+      const updatedOrder = await Order.findOneAndUpdate(
+    { _id: id },
+    [
+      {
+        $set: {
+          status: {
+            $cond: { if: { $eq: ["$status", "pending"] }, then: "completed", else: "pending" },
           },
         },
-      ],
-      { new: true } // Retorna o documento atualizado
-    );
-    
-    
-    const orderChecked = await Order.findById(updatedOrder._id).populate('userId').populate('tableId').populate('items.productId');
-    if (!updatedOrder) {
-      return res.status(404).json({ error: 'Order not found' });
-    }
-    
+      },
+    ],
+    { new: true }
+  );
 
-    io.emit('order@checked', orderChecked);
+  if (!updatedOrder) {
+    return res.status(404).json({ error: 'Order not found' });
+  }
 
-    return res.status(200).json(orderChecked);
+  const orderChecked = await Order.findById(updatedOrder._id)
+    .populate('userId')
+    .populate('tableId')
+    .populate('items.productId');
+
+  return res.status(200).json(orderChecked);
   } catch (err) {
     res.status(500).json(err);
   }
@@ -418,7 +417,6 @@ try {
   try {
     const deletedOrder = await Order.findByIdAndDelete(id);
     if (deletedOrder) {
-      io.emit('order@deleted', deletedOrder); // Certifique-se de que deletedOrder tem _id
       res.status(200).send(deletedOrder);
     } else {
       res.status(404).send({ error: 'Pedido não encontrado' });
