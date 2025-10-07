@@ -33,7 +33,7 @@ const userSchema = new mongoose.Schema({
   password: { type: String, required: true },
   imageURL: { type: String, required: true },
   createdAt: { type: Date, default: Date.now },
-}, { timestamps: true });
+});
 
 const User = mongoose.model('user', userSchema);
 
@@ -86,46 +86,56 @@ cloudinary.config({
 const storage = new CloudinaryStorage({
   cloudinary: cloudinary,
   params: {
-    folder: 'meu-projeto', // Nome da pasta
+    folder: 'meu-projeto',
     allowed_formats: ['jpg', 'png', 'jpeg', 'gif'],
-    public_id: (req, file) => {
-      const nameWithoutExt = path.parse(file.originalname).name; // remove extensão
-      return `${Date.now()}-${nameWithoutExt}`; // nome único sem duplicar a extensão
-    },
+    public_id: (req, file) => `${Date.now()}-${file.originalname}`
   },
 });
 
-const upload = multer({storage});
-
-// Create User
+const upload = multer({ storage });
+// Register user
 app.post('/user', upload.single('image'), async (req, res) => {
   try {
     const { name, login, password } = req.body;
 
-    // Verifica se já existe usuário com esse login
+    if (!name || !login || !password) {
+      return res.status(400).json({ error: "Name, login and password are required" });
+    }
+
+    if (!req.file || !req.file.path) {
+      return res.status(400).json({ error: "Profile image is required" });
+    }
+
+    console.log(req.file);
+
     const existingUser = await User.findOne({ login });
     if (existingUser) {
       return res.status(409).json({ error: "Login already in use" });
     }
 
-    // 🔹 Verifica se imagem foi enviada
-    if (!req.file || !req.file.path) {
-      return res.status(400).json({ error: "Profile image is required" });
-    }
-
-    const imageURL = req.file.path; // URL direta do Cloudinary
-
-    // Criptografa a senha antes de salvar
     const hashedPassword = await bcrypt.hash(password, 10);
-    const newUser = new User({ name, login, password: hashedPassword, imageURL });
+    const newUser = new User({ name, login, password: hashedPassword, imageURL: req.file.path });
+
     await newUser.save();
 
-    return res.status(201).json({ message: "User created successfully" });
+    return res.status(201).json({
+      message: "User created successfully",
+      user: {
+        _id: newUser._id,
+        name: newUser.name,
+        login: newUser.login,
+        imageURL: newUser.imageURL,
+      }
+    });
   } catch (err) {
-    console.error("Erro no cadastro:", err);
-    return res.status(500).json({ error: "Internal server error" });
+  console.error("Erro no cadastro:", err);
+  if (err.name === 'MongoServerError' && err.code === 11000) {
+    return res.status(409).json({ error: "Login já está em uso" });
   }
+  return res.status(500).json({ error: err.message || "Internal server error" });
+}
 });
+
 
 // Login user
 app.post('/login', async (req, res) => {
