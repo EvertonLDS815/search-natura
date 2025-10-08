@@ -106,8 +106,6 @@ app.post('/user', upload.single('image'), async (req, res) => {
       return res.status(400).json({ error: "Profile image is required" });
     }
 
-    console.log(req.file);
-
     const existingUser = await User.findOne({ login });
     if (existingUser) {
       return res.status(409).json({ error: "Login already in use" });
@@ -212,10 +210,14 @@ const auth = (req, res, next) => {
 
 app.get('/user', auth, async (req, res) => {
   try {
-  const user = await User.find();
-  return res.status(200).json(user);
+    const user = await User.findById(req.userId).select('-password'); // ignora senha
+    if (!user) {
+      return res.status(404).json({ error: 'Usuário não encontrado' });
+    }
+    return res.status(200).json(user);
   } catch (err) {
-    return res.status(500).json(err);
+    console.error('Erro ao buscar usuário autenticado:', err);
+    return res.status(500).json({ error: 'Erro interno no servidor' });
   }
 });
 
