@@ -285,6 +285,17 @@ app.get('/products', auth, async (req, res) => {
   }
 });
 
+// Get Products by Category
+app.get('/products/category/:categoryId', auth, async (req, res) => {
+  try {
+    const { categoryId } = req.params;
+    const products = await Product.find({ category: categoryId }).sort({createdAt: 1});
+    return res.status(200).json(products);
+  } catch (err) {
+    return res.status(500).json(err);
+  }
+});
+
 // Post Products
 app.post('/product', upload.single('image'), async (req, res) => {
   try {
