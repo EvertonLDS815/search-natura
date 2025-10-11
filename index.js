@@ -221,6 +221,32 @@ app.get('/user', auth, async (req, res) => {
   }
 });
 
+// Edit User
+app.patch('/user/:id', auth, upload.single('image'), async (req, res) => {
+  try {
+    const { id } = req.params;
+    const updates = { ...req.body };
+    if (req.file && req.file.path) {
+      updates.imageURL = req.file.path;
+    }
+    if (updates.password) {
+      updates.password = await bcrypt.hash(updates.password, 10);
+    }
+    const updatedUser = await User.findOneAndUpdate(
+      { _id: id },
+      updates,
+      { new: true } // retorna o usuário já atualizado
+    ).select('-password'); // ignora senha
+    if (!updatedUser) {
+      return res.status(404).json({ error: 'Usuário não encontrado' });
+    }
+    return res.status(200).json(updatedUser);
+  } catch (err) {
+    console.error('Erro ao atualizar usuário:', err);
+    return res.status(500).json({ error: 'Erro interno no servidor' });
+  }
+});
+
 // Get Categories
 app.get('/categories', auth, async (req, res) => {
   try {
@@ -278,7 +304,7 @@ app.post('/product', auth, upload.single('image'), async (req, res) => {
 // Get Products
 app.get('/products', auth, async (req, res) => {
   try {
-    const products = await Product.find().sort({createdAt: 1});
+    const products = await Product.find().sort({createdAt: 1}).populate('category');
     return res.status(200).json(products);
   } catch (err) {
     return res.status(500).json(err);
