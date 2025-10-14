@@ -311,6 +311,19 @@ app.get('/products', auth, async (req, res) => {
   }
 });
 
+app.get('/product/:id', auth, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const product = await Product.findById(id).populate('category');
+    if (!product) {
+      return res.status(404).json({ error: 'Produto não encontrado' });
+    }
+    return res.status(200).json(product);
+  } catch (err) {
+    return res.status(500).json(err);
+  }
+});
+
 // Get Products by Category
 app.get('/products/category/:categoryId', auth, async (req, res) => {
   try {
@@ -347,18 +360,37 @@ app.post('/product', upload.single('image'), async (req, res) => {
   }
 });
 
-
-// Update Product
-app.patch('/product/:id', auth, async (req, res) => {
+// Edit Product
+app.patch('/product/:id', auth, upload.single('image'), async (req, res) => {
   try {
     const { id } = req.params;
 
-    // Atualiza e retorna o produto atualizado
-    const updatedProduct = await Product.findOneAndUpdate(
-      { _id: id },
-      req.body,
-      { new: true } // retorna o produto já atualizado
-    );
+    // build do objeto de atualização a partir de req.body
+    const updateData = {};
+
+    // campos esperados (ajuste conforme seu modelo)
+    if (req.body.name) updateData.name = req.body.name;
+    if (req.body.price) updateData.price = Number(req.body.price);
+    if (req.body.category) {
+      // se você usa ObjectId no schema, pode converter
+      if (mongoose.Types.ObjectId.isValid(req.body.category)) {
+        updateData.category = req.body.category;
+      } else {
+        // opcional: tratar erro ou ignorar
+        updateData.category = req.body.category;
+      }
+    }
+
+    // se veio arquivo, armazena a URL/caminho
+    if (req.file) {
+      // exemplo de URL acessível publicamente (supondo app.use('/uploads', express.static('uploads')))
+      updateData.imageURL = `/uploads/${req.file.filename}`;
+    }
+
+    const updatedProduct = await Product.findByIdAndUpdate(id, updateData, {
+      new: true,
+      runValidators: true,
+    });
 
     if (!updatedProduct) {
       return res.status(404).json({ error: 'Product not found' });
@@ -367,7 +399,7 @@ app.patch('/product/:id', auth, async (req, res) => {
     return res.status(200).json(updatedProduct);
   } catch (err) {
     console.error('❌ Erro ao atualizar produto:', err);
-    res.status(500).json({ error: 'Internal server error' });
+    return res.status(500).json({ error: 'Internal server error' });
   }
 });
 
@@ -434,39 +466,6 @@ app.post('/order', auth, async (req, res) => {
   }
 });
 
-// Update Order - Toggle status between 'pending' and 'completed'
-app.patch('/order/:id', auth, async (req, res) => {
-  try {
-    const { id } = req.params;
-
-      const updatedOrder = await Order.findOneAndUpdate(
-    { _id: id },
-    [
-      {
-        $set: {
-          status: {
-            $cond: { if: { $eq: ["$status", "pending"] }, then: "completed", else: "pending" },
-          },
-        },
-      },
-    ],
-    { new: true }
-  );
-
-  if (!updatedOrder) {
-    return res.status(404).json({ error: 'Order not found' });
-  }
-
-  const orderChecked = await Order.findById(updatedOrder._id)
-    .populate('userId')
-    .populate('tableId')
-    .populate('items.productId');
-
-  return res.status(200).json(orderChecked);
-  } catch (err) {
-    res.status(500).json(err);
-  }
-});
 
 // Delete Order
 app.delete('/order/:id', async (req, res) => {
