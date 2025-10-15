@@ -382,9 +382,8 @@ app.patch('/product/:id', auth, upload.single('image'), async (req, res) => {
     }
 
     // se veio arquivo, armazena a URL/caminho
-    if (req.file) {
-      // exemplo de URL acessível publicamente (supondo app.use('/uploads', express.static('uploads')))
-      updateData.imageURL = `/uploads/${req.file.filename}`;
+    if (req.file && req.file.path) {
+        updateData.imageURL = req.file.path; // URL do Cloudinary
     }
 
     const updatedProduct = await Product.findByIdAndUpdate(id, updateData, {
