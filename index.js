@@ -350,14 +350,12 @@ app.post('/product', upload.single('image'), async (req, res) => {
       return res.status(400).json({ error: 'Imagem é obrigatória' });
     }
 
-    const imageURL = req.file.path; // URL completa da imagem
-    const public_id = req.file.filename || req.file.public_id; // importante!
+    const imageURL = req.file.path; // URL direta do Cloudinary
 
     const product = new Product({
       name,
       price,
       imageURL,
-      public_id, // salva isso no banco
     });
 
     await product.save();
@@ -367,7 +365,6 @@ app.post('/product', upload.single('image'), async (req, res) => {
     res.status(500).json({ error: error.message });
   }
 });
-
 
 // Edit Product
 app.patch('/product/:id', auth, upload.single('image'), async (req, res) => {
@@ -391,8 +388,9 @@ app.patch('/product/:id', auth, upload.single('image'), async (req, res) => {
     }
 
     // se veio arquivo, armazena a URL/caminho
-    if (req.file && req.file.path) {
-        updateData.imageURL = req.file.path; // URL do Cloudinary
+    if (req.file) {
+      // exemplo de URL acessível publicamente (supondo app.use('/uploads', express.static('uploads')))
+      updateData.imageURL = `/uploads/${req.file.filename}`;
     }
 
     const updatedProduct = await Product.findByIdAndUpdate(id, updateData, {
@@ -416,32 +414,32 @@ app.delete('/product/:id', auth, async (req, res) => {
   try {
     const { id } = req.params;
 
-    // Busca o produto
+    // Encontra o produto primeiro
     const product = await Product.findById(id);
     if (!product) {
       return res.status(404).json({ error: 'Produto não encontrado' });
     }
 
-    // Se tiver imagem, deleta do Cloudinary
-    if (product.public_id) {
-      try {
-        await cloudinary.uploader.destroy(product.public_id);
-        console.log(`🗑️ Imagem deletada do Cloudinary: ${product.public_id}`);
-      } catch (err) {
-        console.warn('⚠️ Falha ao deletar imagem no Cloudinary:', err.message);
-      }
-    }
+    // Remove a imagem do Cloudinary
+    // Aqui assumimos que product.imageURL é algo como "meu-projeto/1758026546-nome.jpg"
+    // Se tiver a URL completa, podemos extrair o public_id:
+    const publicId = product.imageURL
+      .split('/')
+      .slice(-2)
+      .join('/')
+      .split('.')[0]; // remove a extensão
 
-    // Deleta o produto do banco
+    await cloudinary.uploader.destroy(publicId);
+
+    // Remove o produto do banco de dados
     await Product.findByIdAndDelete(id);
 
     return res.sendStatus(204);
   } catch (err) {
-    console.error('❌ Erro ao deletar produto:', err);
-    return res.status(500).json({ error: 'Erro interno do servidor' });
+    console.error(err);
+    return res.status(500).json(err);
   }
 });
-
 
 // Get Orders
 app.get('/orders', async (req, res) => {
