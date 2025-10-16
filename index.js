@@ -88,7 +88,7 @@ const storage = new CloudinaryStorage({
   params: {
     folder: 'meu-projeto',
     allowed_formats: ['jpg', 'png', 'jpeg', 'gif'],
-    public_id: (req, file) => `${Date.now()}-${file.originalname}`
+    public_id: (req, file) => `${Date.now()}-${path.parse(file.originalname).name}`
   },
 });
 
