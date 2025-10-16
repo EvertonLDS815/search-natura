@@ -83,20 +83,14 @@ cloudinary.config({
   api_secret: process.env.CLOUDINARY_API_SECRET,
 });
 
-const path = require('path');
-
 const storage = new CloudinaryStorage({
-  cloudinary,
+  cloudinary: cloudinary,
   params: {
     folder: 'meu-projeto',
     allowed_formats: ['jpg', 'png', 'jpeg', 'gif'],
-    public_id: (req, file) => {
-      const baseName = path.parse(file.originalname).name; // remove .jpg
-      return `${Date.now()}-${baseName}`; // ✅ sem duplicar extensão
-    },
+    public_id: (req, file) => `${Date.now()}-${file.originalname}`
   },
 });
-
 
 const upload = multer({ storage });
 // Register user
