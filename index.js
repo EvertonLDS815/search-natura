@@ -83,14 +83,20 @@ cloudinary.config({
   api_secret: process.env.CLOUDINARY_API_SECRET,
 });
 
+const path = require('path');
+
 const storage = new CloudinaryStorage({
-  cloudinary: cloudinary,
+  cloudinary,
   params: {
     folder: 'meu-projeto',
     allowed_formats: ['jpg', 'png', 'jpeg', 'gif'],
-    public_id: (req, file) => `${Date.now()}-${file.originalname}`
+    public_id: (req, file) => {
+      const baseName = path.parse(file.originalname).name; // remove .jpg
+      return `${Date.now()}-${baseName}`; // ✅ sem duplicar extensão
+    },
   },
 });
+
 
 const upload = multer({ storage });
 // Register user
@@ -344,12 +350,14 @@ app.post('/product', upload.single('image'), async (req, res) => {
       return res.status(400).json({ error: 'Imagem é obrigatória' });
     }
 
-    const imageURL = req.file.path; // URL direta do Cloudinary
+    const imageURL = req.file.path; // URL completa da imagem
+    const public_id = req.file.filename || req.file.public_id; // importante!
 
     const product = new Product({
       name,
       price,
       imageURL,
+      public_id, // salva isso no banco
     });
 
     await product.save();
@@ -359,6 +367,7 @@ app.post('/product', upload.single('image'), async (req, res) => {
     res.status(500).json({ error: error.message });
   }
 });
+
 
 // Edit Product
 app.patch('/product/:id', auth, upload.single('image'), async (req, res) => {
@@ -408,32 +417,32 @@ app.delete('/product/:id', auth, async (req, res) => {
   try {
     const { id } = req.params;
 
-    // Encontra o produto primeiro
+    // Busca o produto
     const product = await Product.findById(id);
     if (!product) {
       return res.status(404).json({ error: 'Produto não encontrado' });
     }
 
-    // Remove a imagem do Cloudinary
-    // Aqui assumimos que product.imageURL é algo como "meu-projeto/1758026546-nome.jpg"
-    // Se tiver a URL completa, podemos extrair o public_id:
-    const publicId = product.imageURL
-      .split('/')
-      .slice(-2)
-      .join('/')
-      .split('.')[0]; // remove a extensão
+    // Se tiver imagem, deleta do Cloudinary
+    if (product.public_id) {
+      try {
+        await cloudinary.uploader.destroy(product.public_id);
+        console.log(`🗑️ Imagem deletada do Cloudinary: ${product.public_id}`);
+      } catch (err) {
+        console.warn('⚠️ Falha ao deletar imagem no Cloudinary:', err.message);
+      }
+    }
 
-    await cloudinary.uploader.destroy(publicId);
-
-    // Remove o produto do banco de dados
+    // Deleta o produto do banco
     await Product.findByIdAndDelete(id);
 
     return res.sendStatus(204);
   } catch (err) {
-    console.error(err);
-    return res.status(500).json(err);
+    console.error('❌ Erro ao deletar produto:', err);
+    return res.status(500).json({ error: 'Erro interno do servidor' });
   }
 });
+
 
 // Get Orders
 app.get('/orders', async (req, res) => {
