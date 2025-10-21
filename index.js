@@ -304,12 +304,31 @@ app.post('/product', auth, upload.single('image'), async (req, res) => {
 // Get Products
 app.get('/products', auth, async (req, res) => {
   try {
-    const products = await Product.find().sort({createdAt: 1}).populate('category');
+    const products = await Product.aggregate([
+      {
+        $lookup: {
+          from: 'categories', // nome da collection de categorias
+          localField: 'category',
+          foreignField: '_id',
+          as: 'categoryData'
+        }
+      },
+      { $unwind: '$categoryData' }, // transforma o array em objeto
+      {
+        $sort: {
+          'categoryData.createdAt': 1, // ordem de criação da categoria
+          'createdAt': 1               // ordem de criação do produto
+        }
+      }
+    ]);
+
     return res.status(200).json(products);
   } catch (err) {
+    console.error(err);
     return res.status(500).json(err);
   }
 });
+
 
 app.get('/product/:id', auth, async (req, res) => {
   try {
