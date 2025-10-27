@@ -269,6 +269,16 @@ app.post('/category', auth, async (req, res) => {
   }
 });
 
+app.delete('/category/:id', auth, async (req, res) => {
+  try {
+  const { id } = req.params;
+    await Category.findByIdAndDelete(id);
+    return res.sendStatus(204);
+  } catch (err) {
+    return res.status(500).json(err);
+  }
+});
+
 // Create Product - Upload Image to Cloudinary
 app.post('/product', auth, upload.single('image'), async (req, res) => {
   try {
