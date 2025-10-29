@@ -45,13 +45,13 @@ const categorySchema = new mongoose.Schema({
 const Category = mongoose.model('category', categorySchema);
 
 const productSchema = new mongoose.Schema({
-  name: { type: String, required: true },
-  price: { type: Number, required: true },
-  onSale: {type: String, required: true},
-  salePrice: {type: Number, required: true},
-  imageURL: { type: String, required: true },
-  category: { type: mongoose.Schema.Types.ObjectId, ref: 'category', required: true },
-  createdAt: { type: Date, default: Date.now },
+  name: {type: String, required: true},
+  price: {type: Number, required: true},
+  onSale: {type: String, required: false},
+  salePrice: {type: Number, default: null},
+  imageURL: {type: String, required: true},
+  category: {type: mongoose.Schema.Types.ObjectId, ref: 'category', required: true },
+  createdAt: {type: Date, default: Date.now},
 }, { timestamps: true });
 
 const Product = mongoose.model('product', productSchema);
@@ -282,34 +282,29 @@ app.delete('/category/:id', auth, async (req, res) => {
 });
 
 // Create Product - Upload Image to Cloudinary
-app.post('/product', auth, upload.single('image'), async (req, res) => {
+app.post("/product", upload.single("image"), async (req, res) => {
   try {
-    const { name, price, category } = req.body;
+    const { name, price, onSale, salePrice, category } = req.body;
+    const imageURL = req.file ? `/uploads/${req.file.filename}` : null;
 
-    if (!req.file || !req.file.path) {
-      return res.status(400).json({ error: 'Imagem é obrigatória' });
-    }
+    // ⚙️ Corrige o tipo e garante valores coerentes
+    const isOnSale = onSale === "true" || onSale === true;
 
-    const categoryExists = await Category.findById(category);
-    if (!categoryExists) {
-      return res.status(404).json({ error: 'Categoria não encontrada.' });
-    }
-
-    const imageURL = req.file.path; // URL direta do Cloudinary
-
-    const product = new Product({
+    const newProduct = new Product({
       name,
       price,
-      category,
+      onSale: isOnSale,
+      salePrice: isOnSale ? salePrice : null, // ✅ Só define se estiver em promoção
       imageURL,
+      category,
     });
 
-    await product.save();
+    await newProduct.save();
 
-    return res.status(201).json(product);
+    res.status(201).json({ message: "Produto criado com sucesso!", product: newProduct });
   } catch (error) {
-    console.error('❌ Erro ao salvar produto:', error);
-    return res.status(500).json({ error: error.message });
+    console.error("Erro ao criar produto:", error);
+    res.status(500).json({ error: "Erro ao criar produto", details: error.message });
   }
 });
 
