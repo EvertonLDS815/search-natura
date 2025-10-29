@@ -47,6 +47,8 @@ const Category = mongoose.model('category', categorySchema);
 const productSchema = new mongoose.Schema({
   name: { type: String, required: true },
   price: { type: Number, required: true },
+  onSale: {type: String, required: true},
+  salePrice: {type: Number, required: true},
   imageURL: { type: String, required: true },
   category: { type: mongoose.Schema.Types.ObjectId, ref: 'category', required: true },
   createdAt: { type: Date, default: Date.now },
