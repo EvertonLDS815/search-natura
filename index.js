@@ -403,22 +403,33 @@ app.patch('/product/:id', auth, upload.single('image'), async (req, res) => {
     // build do objeto de atualização a partir de req.body
     const updateData = {};
 
-    // campos esperados (ajuste conforme seu modelo)
+    // campos esperados
     if (req.body.name) updateData.name = req.body.name;
     if (req.body.price) updateData.price = Number(req.body.price);
+
     if (req.body.category) {
       // se você usa ObjectId no schema, pode converter
       if (mongoose.Types.ObjectId.isValid(req.body.category)) {
         updateData.category = req.body.category;
       } else {
-        // opcional: tratar erro ou ignorar
         updateData.category = req.body.category;
+      }
+    }
+
+    // campos de promoção
+    if (req.body.onSale !== undefined) {
+      // converte para boolean
+      updateData.onSale = req.body.onSale === 'true' || req.body.onSale === true;
+      if (updateData.onSale && req.body.salePrice) {
+        updateData.salePrice = Number(req.body.salePrice);
+      } else {
+        updateData.salePrice = undefined; // remove se onSale falso
       }
     }
 
     // se veio arquivo, armazena a URL/caminho
     if (req.file && req.file.path) {
-        updateData.imageURL = req.file.path; // URL do Cloudinary
+      updateData.imageURL = req.file.path; // URL do Cloudinary
     }
 
     const updatedProduct = await Product.findByIdAndUpdate(id, updateData, {
@@ -436,6 +447,7 @@ app.patch('/product/:id', auth, upload.single('image'), async (req, res) => {
     return res.status(500).json({ error: 'Internal server error' });
   }
 });
+
 
 // Delete Product
 app.delete('/product/:id', auth, async (req, res) => {
