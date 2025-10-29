@@ -369,22 +369,24 @@ app.get('/products/category/:categoryId', auth, async (req, res) => {
 // Post Products
 app.post('/product', upload.single('image'), async (req, res) => {
   try {
-    const { name, price, onSale, salePrice } = req.body;
+    const { name, price, onSale, salePrice, category } = req.body;
 
     if (!req.file || !req.file.path) {
       return res.status(400).json({ error: 'Imagem é obrigatória' });
     }
 
-    const imageURL = req.file.path; // URL do Cloudinary
+    const imageURL = req.file.path;
 
     const isOnSale = onSale === 'true' || onSale === true;
+    const salePriceNumber = isOnSale ? Number(salePrice) : Number(price);
 
     const product = new Product({
       name,
-      price,
-      image: imageURL,
-      onSale: isOnSale,
-      salePrice: isOnSale ? salePrice : undefined
+      price: Number(price),
+      imageURL,
+      category,
+      onSale: isOnSale ? "true" : "false",
+      salePrice: salePriceNumber,
     });
 
     await product.save();
@@ -397,41 +399,33 @@ app.post('/product', upload.single('image'), async (req, res) => {
 });
 
 
+
 // Edit Product
 app.patch('/product/:id', auth, upload.single('image'), async (req, res) => {
   try {
     const { id } = req.params;
-
-    // build do objeto de atualização a partir de req.body
     const updateData = {};
 
-    // campos esperados
     if (req.body.name) updateData.name = req.body.name;
     if (req.body.price) updateData.price = Number(req.body.price);
 
     if (req.body.category) {
-      // se você usa ObjectId no schema, pode converter
       if (mongoose.Types.ObjectId.isValid(req.body.category)) {
         updateData.category = req.body.category;
-      } else {
-        updateData.category = req.body.category;
       }
     }
 
-    // campos de promoção
+    // onSale e salePrice
     if (req.body.onSale !== undefined) {
-      // converte para boolean
-      updateData.onSale = req.body.onSale === 'true' || req.body.onSale === true;
-      if (updateData.onSale && req.body.salePrice) {
-        updateData.salePrice = Number(req.body.salePrice);
-      } else {
-        updateData.salePrice = undefined; // remove se onSale falso
-      }
+      const isOnSale = req.body.onSale === 'true' || req.body.onSale === true;
+      updateData.onSale = isOnSale ? "true" : "false";
+      updateData.salePrice = isOnSale
+        ? Number(req.body.salePrice)
+        : updateData.price || Number(req.body.price); // fallback se preço alterado
     }
 
-    // se veio arquivo, armazena a URL/caminho
     if (req.file && req.file.path) {
-      updateData.imageURL = req.file.path; // URL do Cloudinary
+      updateData.imageURL = req.file.path;
     }
 
     const updatedProduct = await Product.findByIdAndUpdate(id, updateData, {
