@@ -367,27 +367,33 @@ app.get('/products/category/:categoryId', auth, async (req, res) => {
 // Post Products
 app.post('/product', upload.single('image'), async (req, res) => {
   try {
-    const { name, price } = req.body;
+    const { name, price, onSale, salePrice } = req.body;
 
     if (!req.file || !req.file.path) {
       return res.status(400).json({ error: 'Imagem é obrigatória' });
     }
 
-    const imageURL = req.file.path; // URL direta do Cloudinary
+    const imageURL = req.file.path; // URL do Cloudinary
+
+    const isOnSale = onSale === 'true' || onSale === true;
 
     const product = new Product({
       name,
       price,
-      imageURL,
+      image: imageURL,
+      onSale: isOnSale,
+      salePrice: isOnSale ? salePrice : undefined
     });
 
     await product.save();
     res.status(201).json(product);
+
   } catch (error) {
     console.error('❌ Erro ao salvar produto:', error);
     res.status(500).json({ error: error.message });
   }
 });
+
 
 // Edit Product
 app.patch('/product/:id', auth, upload.single('image'), async (req, res) => {
