@@ -273,11 +273,11 @@ app.post('/category', auth, async (req, res) => {
 
 app.delete('/category/:id', auth, async (req, res) => {
   try {
-  const { id } = req.params;
+    const { id } = req.params;
     await Category.findByIdAndDelete(id);
     return res.status(200).json({ message: "Categoria excluída com sucesso" });
   } catch (err) {
-    return res.status(500).json(err);
+    return res.status(500).json({ error: "Erro ao excluir categoria", details: err });
   }
 });
 
