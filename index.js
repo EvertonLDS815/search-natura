@@ -285,26 +285,32 @@ app.delete('/category/:id', auth, async (req, res) => {
 app.post("/product", upload.single("image"), async (req, res) => {
   try {
     const { name, price, onSale, salePrice, category } = req.body;
-    const imageURL = req.file ? `/uploads/${req.file.filename}` : null;
 
-    // ⚙️ Corrige o tipo e garante valores coerentes
-    const isOnSale = onSale === "true" || onSale === true;
+    if (!req.file) {
+      return res.status(400).json({ error: "Imagem é obrigatória" });
+    }
 
-    const newProduct = new Product({
-      name,
-      price,
-      onSale: isOnSale,
-      salePrice: isOnSale ? salePrice : null, // ✅ Só define se estiver em promoção
-      imageURL,
-      category,
+    // Upload para Cloudinary
+    const result = await cloudinary.uploader.upload(req.file.path, {
+      folder: "produtos",
     });
 
-    await newProduct.save();
+    const isOnSale = onSale === "true" || onSale === true;
 
-    res.status(201).json({ message: "Produto criado com sucesso!", product: newProduct });
+    const product = new Product({
+      name,
+      price: Number(price),
+      category,
+      image: result.secure_url,      // URL do Cloudinary
+      onSale: isOnSale,              // boolean
+      salePrice: isOnSale ? Number(salePrice) : null,
+    });
+
+    await product.save();
+    res.status(201).json(product);
   } catch (error) {
-    console.error("Erro ao criar produto:", error);
-    res.status(500).json({ error: "Erro ao criar produto", details: error.message });
+    console.error("❌ Erro ao salvar produto:", error);
+    res.status(500).json({ error: error.message });
   }
 });
 
