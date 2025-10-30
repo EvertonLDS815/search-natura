@@ -379,34 +379,46 @@ app.get('/products/category/:categoryId', auth, async (req, res) => {
 });
 
 // Post Products
-app.post('/product', upload.single('image'), async (req, res) => {
+app.post("/product", auth, upload.single("image"), async (req, res) => {
   try {
-    const { name, price, onSale, salePrice, category } = req.body;
+    const { name, price, category, onSale, salePrice } = req.body;
 
-    if (!req.file || !req.file.path) {
-      return res.status(400).json({ error: 'Imagem é obrigatória' });
+    if (!name || !price || !category) {
+      return res.status(400).json({ error: "Campos obrigatórios ausentes" });
     }
 
-    const imageURL = req.file.path;
-
-    const isOnSale = onSale === 'true' || onSale === true;
-    const salePriceNumber = isOnSale ? Number(salePrice) : Number(price);
-
-    const product = new Product({
+    const newProductData = {
       name,
       price: Number(price),
-      imageURL,
       category,
-      onSale: isOnSale ? "true" : "false",
-      salePrice: salePriceNumber,
+      onSale: onSale === "true" || onSale === true,
+    };
+
+    // Se for promoção, define o preço promocional
+    if (newProductData.onSale && salePrice) {
+      newProductData.salePrice = Number(salePrice);
+    }
+
+    // Se enviou imagem → envia ao Cloudinary
+    if (req.file && req.file.path) {
+      const uploadResult = await cloudinary.uploader.upload(req.file.path, {
+        folder: "products",
+      });
+      fs.unlinkSync(req.file.path); // remove o arquivo local
+      newProductData.imageURL = uploadResult.secure_url;
+    }
+
+    // Cria o produto
+    const newProduct = new Product(newProductData);
+    await newProduct.save();
+
+    return res.status(201).json({
+      message: "Produto criado com sucesso!",
+      product: newProduct,
     });
-
-    await product.save();
-    res.status(201).json(product);
-
-  } catch (error) {
-    console.error('❌ Erro ao salvar produto:', error);
-    res.status(500).json({ error: error.message });
+  } catch (err) {
+    console.error("❌ Erro ao criar produto:", err);
+    return res.status(500).json({ error: "Erro ao criar produto" });
   }
 });
 
