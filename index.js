@@ -394,21 +394,15 @@ app.post("/product", auth, upload.single("image"), async (req, res) => {
       onSale: onSale === "true" || onSale === true,
     };
 
-    // Se for promoção, define o preço promocional
     if (newProductData.onSale && salePrice) {
       newProductData.salePrice = Number(salePrice);
     }
 
-    // Se enviou imagem → envia ao Cloudinary
+    // 👉 Se está usando multer-storage-cloudinary:
     if (req.file && req.file.path) {
-      const uploadResult = await cloudinary.uploader.upload(req.file.path, {
-        folder: "products",
-      });
-      fs.unlinkSync(req.file.path); // remove o arquivo local
-      newProductData.imageURL = uploadResult.secure_url;
+      newProductData.imageURL = req.file.path; // Cloudinary já fornece a URL segura aqui
     }
 
-    // Cria o produto
     const newProduct = new Product(newProductData);
     await newProduct.save();
 
@@ -418,7 +412,7 @@ app.post("/product", auth, upload.single("image"), async (req, res) => {
     });
   } catch (err) {
     console.error("❌ Erro ao criar produto:", err);
-    return res.status(500).json({ error: "Erro ao criar produto" });
+    return res.status(500).json({ error: "Erro ao criar produto", details: err.message });
   }
 });
 
