@@ -275,7 +275,7 @@ app.delete('/category/:id', auth, async (req, res) => {
   try {
   const { id } = req.params;
     await Category.findByIdAndDelete(id);
-    return res.sendStatus(204);
+    return res.status(200).json({ message: "Categoria excluída com sucesso" });
   } catch (err) {
     return res.status(500).json(err);
   }
