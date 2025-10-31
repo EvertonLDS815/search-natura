@@ -282,6 +282,7 @@ app.delete('/category/:id', auth, async (req, res) => {
 });
 
 // Create Product - Upload Image to Cloudinary
+// ✅ Criação de produto com upload Cloudinary (rota única)
 app.post("/product", auth, upload.single("image"), async (req, res) => {
   try {
     const { name, price, category, onSale, salePrice } = req.body;
@@ -297,21 +298,15 @@ app.post("/product", auth, upload.single("image"), async (req, res) => {
       onSale: onSale === "true" || onSale === true,
     };
 
-    // Se for promoção, define o preço promocional
     if (newProductData.onSale && salePrice) {
       newProductData.salePrice = Number(salePrice);
     }
 
-    // Se enviou imagem → envia ao Cloudinary
+    // ✅ multer-storage-cloudinary já envia para o Cloudinary
     if (req.file && req.file.path) {
-      const uploadResult = await cloudinary.uploader.upload(req.file.path, {
-        folder: "products",
-      });
-      fs.unlinkSync(req.file.path); // remove o arquivo local
-      newProductData.imageURL = uploadResult.secure_url;
+      newProductData.imageURL = req.file.path;
     }
 
-    // Cria o produto
     const newProduct = new Product(newProductData);
     await newProduct.save();
 
@@ -321,9 +316,13 @@ app.post("/product", auth, upload.single("image"), async (req, res) => {
     });
   } catch (err) {
     console.error("❌ Erro ao criar produto:", err);
-    return res.status(500).json({ error: "Erro ao criar produto" });
+    return res.status(500).json({
+      error: "Erro ao criar produto",
+      details: err.message,
+    });
   }
 });
+
 
 // Get Products
 app.get('/products', auth, async (req, res) => {
@@ -377,46 +376,6 @@ app.get('/products/category/:categoryId', auth, async (req, res) => {
     return res.status(500).json(err);
   }
 });
-
-// Post Products
-app.post("/product", auth, upload.single("image"), async (req, res) => {
-  try {
-    const { name, price, category, onSale, salePrice } = req.body;
-
-    if (!name || !price || !category) {
-      return res.status(400).json({ error: "Campos obrigatórios ausentes" });
-    }
-
-    const newProductData = {
-      name,
-      price: Number(price),
-      category,
-      onSale: onSale === "true" || onSale === true,
-    };
-
-    if (newProductData.onSale && salePrice) {
-      newProductData.salePrice = Number(salePrice);
-    }
-
-    // 👉 Se está usando multer-storage-cloudinary:
-    if (req.file && req.file.path) {
-      newProductData.imageURL = req.file.path; // Cloudinary já fornece a URL segura aqui
-    }
-
-    const newProduct = new Product(newProductData);
-    await newProduct.save();
-
-    return res.status(201).json({
-      message: "Produto criado com sucesso!",
-      product: newProduct,
-    });
-  } catch (err) {
-    console.error("❌ Erro ao criar produto:", err);
-    return res.status(500).json({ error: "Erro ao criar produto", details: err.message });
-  }
-});
-
-
 
 // Edit Product
 app.patch('/product/:id', auth, upload.single('image'), async (req, res) => {
