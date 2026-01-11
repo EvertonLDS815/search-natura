@@ -286,7 +286,7 @@ app.delete('/category/:id', auth, async (req, res) => {
 // ✅ Criação de produto com upload Cloudinary (rota única)
 app.post("/product", auth, upload.single("image"), async (req, res) => {
   try {
-    const { name, price, category, onSale, salePrice } = req.body;
+    const { name, price, stock, category, onSale, salePrice } = req.body;
 
     if (!name || !price || !category) {
       return res.status(400).json({ error: "Campos obrigatórios ausentes" });
@@ -296,6 +296,7 @@ app.post("/product", auth, upload.single("image"), async (req, res) => {
       name,
       price: Number(price),
       category,
+      stock: Number(stock),
       onSale: onSale === "true" || onSale === true,
     };
 
@@ -382,28 +383,59 @@ app.get('/products/category/:categoryId', auth, async (req, res) => {
 app.patch('/product/:id', auth, upload.single('image'), async (req, res) => {
   try {
     const { id } = req.params;
+    const product = req.body;
     const updateData = {};
 
-    if (req.body.name) updateData.name = req.body.name;
-    if (req.body.price) updateData.price = Number(req.body.price);
+    // name
+    if (product.name !== undefined) {
+      updateData.name = product.name;
+    }
 
-    if (req.body.category) {
-      if (mongoose.Types.ObjectId.isValid(req.body.category)) {
-        updateData.category = req.body.category;
+    // price
+    if (product.price !== undefined) {
+      updateData.price = Number(product.price);
+    }
+
+    // stock
+    if (product.stock !== undefined) {
+      updateData.stock = Number(product.stock);
+    }
+
+    // category
+    if (product.category !== undefined) {
+      if (!mongoose.Types.ObjectId.isValid(product.category)) {
+        return res.status(400).json({ error: 'Categoria inválida' });
+      }
+      updateData.category = product.category;
+    }
+
+    // onSale + salePrice
+    if (product.onSale !== undefined) {
+      const isOnSale = product.onSale === 'true' || product.onSale === true;
+      updateData.onSale = isOnSale;
+
+      if (isOnSale) {
+        if (product.salePrice === undefined) {
+          return res.status(400).json({
+            error: 'salePrice é obrigatório quando onSale = true'
+          });
+        }
+        updateData.salePrice = Number(product.salePrice);
+      } else {
+        updateData.salePrice = null;
       }
     }
 
-    // onSale e salePrice
-    if (req.body.onSale !== undefined) {
-      const isOnSale = req.body.onSale === 'true' || req.body.onSale === true;
-      updateData.onSale = isOnSale ? "true" : "false";
-      updateData.salePrice = isOnSale
-        ? Number(req.body.salePrice)
-        : updateData.price || Number(req.body.price); // fallback se preço alterado
+    // image
+    if (req.file?.path) {
+      updateData.imageURL = req.file.path;
     }
 
-    if (req.file && req.file.path) {
-      updateData.imageURL = req.file.path;
+    // segurança extra
+    if (Object.keys(updateData).length === 0) {
+      return res.status(400).json({
+        error: 'Nenhum campo válido para atualizar'
+      });
     }
 
     const updatedProduct = await Product.findByIdAndUpdate(id, updateData, {
@@ -416,6 +448,7 @@ app.patch('/product/:id', auth, upload.single('image'), async (req, res) => {
     }
 
     return res.status(200).json(updatedProduct);
+
   } catch (err) {
     console.error('❌ Erro ao atualizar produto:', err);
     return res.status(500).json({ error: 'Internal server error' });
