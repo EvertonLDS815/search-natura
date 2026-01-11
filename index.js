@@ -50,6 +50,7 @@ const productSchema = new mongoose.Schema({
   onSale: {type: String, required: false},
   salePrice: {type: Number, default: null},
   imageURL: {type: String, required: true},
+  stock: {type: Number, default: 1},
   category: {type: mongoose.Schema.Types.ObjectId, ref: 'category', required: true },
   createdAt: {type: Date, default: Date.now},
 }, { timestamps: true });
