@@ -272,6 +272,70 @@ app.post('/category', auth, async (req, res) => {
   }
 });
 
+app.get("/categories/total-price", async (req, res) => {
+  try {
+    const result = await Product.aggregate([
+      // 1️⃣ Apenas produtos com estoque
+      {
+        $match: {
+          stock: { $gt: 0 }
+        }
+      },
+
+      // 2️⃣ Join com categorias
+      {
+        $lookup: {
+          from: "categories",
+          localField: "category",
+          foreignField: "_id",
+          as: "categoryData"
+        }
+      },
+      { $unwind: "$categoryData" },
+
+      // 3️⃣ Calcula o valor correto por produto
+      {
+        $addFields: {
+          totalValue: {
+            $cond: [
+              {
+                $or: [
+                  { $eq: ["$onSale", true] },
+                  { $eq: ["$onSale", "true"] }
+                ]
+              },
+              { $multiply: ["$salePrice", "$stock"] },
+              { $multiply: ["$price", "$stock"] }
+            ]
+          }
+        }
+      },
+
+      // 4️⃣ Agrupa por categoria
+      {
+        $group: {
+          _id: "$categoryData._id",
+          categoryName: { $first: "$categoryData.name" },
+          categoryCreatedAt: { $first: "$categoryData.createdAt" },
+          totalPrice: { $sum: "$totalValue" },
+          totalProducts: { $sum: "$stock" }
+        }
+      },
+      {
+        $sort: { categoryCreatedAt:   1 }
+      }
+    ]);
+
+    res.json(result);
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({
+      message: "Erro ao calcular total por categoria"
+    });
+  }
+});
+
+
 app.delete('/category/:id', auth, async (req, res) => {
   try {
     const { id } = req.params;
