@@ -51,6 +51,7 @@ const productSchema = new mongoose.Schema({
   salePrice: {type: Number, default: null},
   imageURL: {type: String, required: true},
   stock: {type: Number, default: 1},
+  code: {type: Number, required: true, unique: true },
   category: {type: mongoose.Schema.Types.ObjectId, ref: 'category', required: true },
   createdAt: {type: Date, default: Date.now},
 }, { timestamps: true });
@@ -350,7 +351,7 @@ app.delete('/category/:id', auth, async (req, res) => {
 // ✅ Criação de produto com upload Cloudinary (rota única)
 app.post("/product", auth, upload.single("image"), async (req, res) => {
   try {
-    const { name, price, stock, category, onSale, salePrice } = req.body;
+    const { name, price, stock, category, code, onSale, salePrice } = req.body;
 
     if (!name || !price || !category) {
       return res.status(400).json({ error: "Campos obrigatórios ausentes" });
@@ -360,6 +361,7 @@ app.post("/product", auth, upload.single("image"), async (req, res) => {
       name,
       price: Number(price),
       category,
+      code: Number(code),
       stock: Number(stock),
       onSale: onSale === "true" || onSale === true,
     };
@@ -519,6 +521,39 @@ app.patch('/product/:id', auth, upload.single('image'), async (req, res) => {
   }
 });
 
+app.post("/product/add-stock", async (req, res) => {
+  try {
+    const { code, quantity } = req.body;
+
+    if (!code || !quantity || quantity <= 0) {
+      return res.status(400).json({
+        message: "Código e Quantidade são obrigatórios!"
+      });
+    }
+
+    const product = await Product.findOne({ code });
+
+    if (!product) {
+      return res.status(404).json({
+        message: `Produto com código ${code} não encontrado`
+      });
+    }
+
+    product.stock += quantity;
+    await product.save();
+
+    res.json({
+      message: "Estoque atualizado com sucesso",
+      product
+    });
+
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({
+      message: "Erro ao adicionar estoque"
+    });
+  }
+});
 
 // Delete Product
 app.delete('/product/:id', auth, async (req, res) => {
