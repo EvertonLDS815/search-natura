@@ -525,32 +525,41 @@ app.post("/product/add-stock", async (req, res) => {
   try {
     const { code, quantity } = req.body;
 
-    if (!code || !quantity || quantity <= 0) {
+    // 1️⃣ Código obrigatório
+    if (!code) {
       return res.status(400).json({
-        message: "Código e Quantidade são obrigatórios!"
+        message: "Digite o código do produto!"
       });
     }
 
+    // 2️⃣ Produto precisa existir
     const product = await Product.findOne({ code });
 
     if (!product) {
       return res.status(404).json({
-        message: `Produto com código ${code} não encontrado`
+        message: "Produto não encontrado!"
       });
     }
 
-    product.stock += quantity;
+    // 3️⃣ Quantidade válida SOMENTE depois
+    if (!quantity || quantity <= 0) {
+      return res.status(400).json({
+        message: "Digite a quantidade!"
+      });
+    }
+
+    product.stock += Number(quantity);
     await product.save();
 
     res.json({
-      message: "Estoque atualizado com sucesso",
+      message: "Quantidade atualizada com sucesso!",
       product
     });
 
   } catch (err) {
     console.error(err);
     res.status(500).json({
-      message: "Erro ao adicionar estoque"
+      message: "Erro ao atualizar estoque!"
     });
   }
 });
@@ -563,7 +572,7 @@ app.delete('/product/:id', auth, async (req, res) => {
     // Encontra o produto primeiro
     const product = await Product.findById(id);
     if (!product) {
-      return res.status(404).json({ error: 'Produto não encontrado' });
+      return res.status(404).json({ error: 'Produto não encontrado!' });
     }
 
     // Remove a imagem do Cloudinary
