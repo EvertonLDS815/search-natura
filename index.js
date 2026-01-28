@@ -467,6 +467,10 @@ app.patch('/product/:id', auth, upload.single('image'), async (req, res) => {
       updateData.stock = Number(product.stock);
     }
 
+    if (product.code !== undefined) {
+      updateData.code = Number(product.code);
+    }
+
     // category
     if (product.category !== undefined) {
       if (!mongoose.Types.ObjectId.isValid(product.category)) {
