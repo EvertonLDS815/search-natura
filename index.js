@@ -613,42 +613,74 @@ app.get('/orders', async (req, res) => {
 // Create Order
 app.post('/stock/in', auth, async (req, res) => {
   try {
-    const { productId, quantity } = req.body;
+    const { items } = req.body;
 
-    if (!productId || !quantity || quantity <= 0) {
+    // 1️⃣ Validação básica do body
+    if (!Array.isArray(items) || items.length === 0) {
       return res.status(400).json({
-        message: 'ProductId e quantity são obrigatórios'
+        message: 'Carrinho vazio ou inválido'
       });
     }
 
-    const product = await Product.findById(productId);
-
-    if (!product) {
+    // 2️⃣ Valida usuário autenticado
+    const user = await User.findById(req.userId);
+    if (!user) {
       return res.status(404).json({
-        message: 'Produto não encontrado'
+        message: 'Usuário não encontrado'
       });
     }
 
-    // ➕ soma no estoque
-    product.stock += quantity;
-    await product.save();
+    // 3️⃣ Normaliza itens (evita produto duplicado)
+    const normalized = {};
 
-    return res.json({
-      message: 'Entrada de estoque realizada com sucesso',
-      product: {
-        id: product._id,
-        name: product.name,
-        stock: product.stock
+    for (const item of items) {
+      const productId = item.productId || item._id;
+      const quantity = Number(item.quantity);
+
+      if (!productId || isNaN(quantity) || quantity <= 0) {
+        return res.status(400).json({
+          message: 'ProductId e quantity são obrigatórios'
+        });
       }
+
+      const id = productId.toString();
+      normalized[id] = (normalized[id] || 0) + quantity;
+    }
+
+    const finalItems = Object.entries(normalized).map(
+      ([productId, quantity]) => ({ productId, quantity })
+    );
+
+    // 4️⃣ Valida se os produtos existem
+    for (const item of finalItems) {
+      const product = await Product.findById(item.productId);
+      if (!product) {
+        return res.status(404).json({
+          message: 'Produto não encontrado'
+        });
+      }
+    }
+
+    // 5️⃣ SOMA o estoque
+    for (const item of finalItems) {
+      await Product.findByIdAndUpdate(
+        item.productId,
+        { $inc: { stock: item.quantity } }
+      );
+    }
+
+    return res.status(200).json({
+      message: 'Entrada registrada com sucesso'
     });
 
-  } catch (error) {
-    console.error(error);
+  } catch (err) {
+    console.error('ERRO /stock/in:', err);
     return res.status(500).json({
-      message: 'Erro ao dar entrada no estoque'
+      message: 'Erro ao registrar entrada'
     });
   }
 });
+
 
 app.post('/stock/out', auth, async (req, res) => {
   try {
