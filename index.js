@@ -611,26 +611,112 @@ app.get('/orders', async (req, res) => {
 });
 
 // Create Order
-app.post('/order', auth, async (req, res) => {
+app.post('/stock/in', auth, async (req, res) => {
   try {
-    const order = req.body;
-    if (order.items.length === 0) {
-      return res.status(400).json('Continue sem pedir seu miseravi!');
+    const { productId, quantity } = req.body;
+
+    if (!productId || !quantity || quantity <= 0) {
+      return res.status(400).json({
+        message: 'ProductId e quantity são obrigatórios'
+      });
     }
 
-    const createdOrder = await Order.create(order);
-    const orderDetails = await Order.findById(createdOrder._id)
-      .populate('userId')
-      .populate('tableId')
-      .populate('items.productId');
+    const product = await Product.findById(productId);
 
-    return res.status(201).json(orderDetails);  // Envia a resposta para o frontend
-  } catch (err) {
-    console.error(err);
-    return res.status(500).json({ error: 'Internal Server Error' });
+    if (!product) {
+      return res.status(404).json({
+        message: 'Produto não encontrado'
+      });
+    }
+
+    // ➕ soma no estoque
+    product.stock += quantity;
+    await product.save();
+
+    return res.json({
+      message: 'Entrada de estoque realizada com sucesso',
+      product: {
+        id: product._id,
+        name: product.name,
+        stock: product.stock
+      }
+    });
+
+  } catch (error) {
+    console.error(error);
+    return res.status(500).json({
+      message: 'Erro ao dar entrada no estoque'
+    });
   }
 });
 
+app.post('/stock/out', auth, async (req, res) => {
+  try {
+    const { items } = req.body;
+
+    if (!Array.isArray(items) || items.length === 0) {
+      return res.status(400).json({ message: 'Carrinho vazio ou inválido' });
+    }
+
+    const user = await User.findById(req.userId);
+    if (!user) {
+      return res.status(404).json({ message: 'Usuário não encontrado' });
+    }
+
+    const normalized = {};
+
+    for (const item of items) {
+      const productId = item._id || item.id || item.productId;
+      const quantity = Number(item.quantity);
+
+      if (!productId || isNaN(quantity) || quantity <= 0) {
+        return res.status(400).json({ message: 'Item inválido' });
+      }
+
+      const id = productId.toString();
+      normalized[id] = (normalized[id] || 0) + quantity;
+    }
+
+    const finalItems = Object.entries(normalized).map(
+      ([productId, quantity]) => ({ productId, quantity })
+    );
+
+    for (const item of finalItems) {
+      const product = await Product.findById(item.productId);
+
+      if (!product) {
+        return res.status(404).json({ message: 'Produto não encontrado' });
+      }
+
+      if (product.stock < item.quantity) {
+        return res.status(400).json({
+          message: `Estoque insuficiente para ${product.name}`
+        });
+      }
+    }
+
+    for (const item of finalItems) {
+      await Product.findByIdAndUpdate(
+        item.productId,
+        { $inc: { stock: -item.quantity } }
+      );
+    }
+
+    const order = await Order.create({
+      userId: req.userId,
+      items: finalItems
+    });
+
+    return res.status(201).json({
+      message: 'Venda realizada com sucesso',
+      order
+    });
+
+  } catch (err) {
+    console.error(err);
+    return res.status(500).json({ message: 'Erro ao finalizar venda' });
+  }
+});
 
 // Delete Order
 app.delete('/order/:id', async (req, res) => {
